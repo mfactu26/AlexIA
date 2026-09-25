@@ -1,11 +1,107 @@
 package fr.alexia.app;
-import android.Manifest; import android.app.Activity; import android.os.Bundle; import android.content.Intent; import android.net.Uri; import android.webkit.*; import android.speech.*; import android.speech.tts.TextToSpeech; import java.util.*;
+
+import android.Manifest;
+import android.app.Activity;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.speech.*;
+import android.speech.tts.TextToSpeech;
+import android.webkit.*;
+import java.util.*;
+
 public class MainActivity extends Activity {
- WebView web; ValueCallback<Uri[]> fileCallback; TextToSpeech tts;
- @Override public void onCreate(Bundle b){super.onCreate(b);if(android.os.Build.VERSION.SDK_INT>=23)requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},7);tts=new TextToSpeech(this,s->{if(s==TextToSpeech.SUCCESS)tts.setLanguage(Locale.FRANCE);});
- web=new WebView(this);WebSettings s=web.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setMediaPlaybackRequiresUserGesture(false);
- web.addJavascriptInterface(new Object(){@JavascriptInterface public void listen(){runOnUiThread(()->startVoice());}@JavascriptInterface public void speak(String t){runOnUiThread(()->tts.speak(t,TextToSpeech.QUEUE_FLUSH,null,"alexia"));}},"AlexiaAndroid");
- web.setWebViewClient(new WebViewClient());web.setWebChromeClient(new WebChromeClient(){@Override public void onPermissionRequest(PermissionRequest r){runOnUiThread(()->r.grant(r.getResources()));}@Override public boolean onShowFileChooser(WebView w,ValueCallback<Uri[]> cb,FileChooserParams p){fileCallback=cb;startActivityForResult(p.createIntent(),8);return true;}});web.loadUrl("https://alexia-flame.vercel.app");setContentView(web);}
- void startVoice(){SpeechRecognizer r=SpeechRecognizer.createSpeechRecognizer(this);Intent i=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);i.putExtra(RecognizerIntent.EXTRA_LANGUAGE,"fr-FR");r.setRecognitionListener(new RecognitionListener(){public void onReadyForSpeech(Bundle b){}public void onBeginningOfSpeech(){}public void onRmsChanged(float f){}public void onBufferReceived(byte[]b){}public void onEndOfSpeech(){}public void onError(int e){web.evaluateJavascript("window.__alexiaVoiceError&&window.__alexiaVoiceError()",null);r.destroy();}public void onResults(Bundle b){ArrayList<String>x=b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);if(x!=null&&!x.isEmpty())web.evaluateJavascript("window.__alexiaVoiceResult("+org.json.JSONObject.quote(x.get(0))+")",null);r.destroy();}public void onPartialResults(Bundle b){}public void onEvent(int t,Bundle b){}});r.startListening(i);}
- @Override protected void onActivityResult(int q,int r,Intent d){super.onActivityResult(q,r,d);if(q==8&&fileCallback!=null){fileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(r,d));fileCallback=null;}}
- @Override protected void onDestroy(){if(tts!=null)tts.shutdown();super.onDestroy();}@Override public void onBackPressed(){if(web.canGoBack())web.goBack();else super.onBackPressed();}}
+ WebView web;
+ ValueCallback<Uri[]> fileCallback;
+ TextToSpeech tts;
+ GeolocationPermissions.Callback geoCallback;
+ String geoOrigin;
+
+ @Override public void onCreate(Bundle b){
+  super.onCreate(b);
+  if(Build.VERSION.SDK_INT>=23)requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},7);
+  tts=new TextToSpeech(this,s->{if(s==TextToSpeech.SUCCESS)tts.setLanguage(Locale.FRANCE);});
+
+  web=new WebView(this);
+  WebSettings s=web.getSettings();
+  s.setJavaScriptEnabled(true);
+  s.setDomStorageEnabled(true);
+  s.setMediaPlaybackRequiresUserGesture(false);
+  s.setGeolocationEnabled(true);
+
+  web.addJavascriptInterface(new Object(){
+   @JavascriptInterface public void listen(){runOnUiThread(()->startVoice());}
+   @JavascriptInterface public void speak(String t){runOnUiThread(()->tts.speak(t,TextToSpeech.QUEUE_FLUSH,null,"alexia"));}
+  },"AlexiaAndroid");
+
+  web.setWebViewClient(new WebViewClient());
+  web.setWebChromeClient(new WebChromeClient(){
+   @Override public void onPermissionRequest(PermissionRequest r){runOnUiThread(()->r.grant(r.getResources()));}
+   @Override public void onGeolocationPermissionsShowPrompt(String origin,GeolocationPermissions.Callback callback){
+    runOnUiThread(()->{
+     if(hasLocationPermission()){callback.invoke(origin,true,false);}
+     else{
+      geoOrigin=origin;geoCallback=callback;
+      if(Build.VERSION.SDK_INT>=23)requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION,Manifest.permission.ACCESS_FINE_LOCATION},9);
+      else callback.invoke(origin,true,false);
+     }
+    });
+   }
+   @Override public boolean onShowFileChooser(WebView w,ValueCallback<Uri[]> cb,FileChooserParams p){
+    fileCallback=cb;startActivityForResult(p.createIntent(),8);return true;
+   }
+  });
+  web.loadUrl("https://alexia-flame.vercel.app");
+  setContentView(web);
+ }
+
+ boolean hasLocationPermission(){
+  return Build.VERSION.SDK_INT<23
+   ||checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED
+   ||checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED;
+ }
+
+ @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grantResults){
+  super.onRequestPermissionsResult(requestCode,permissions,grantResults);
+  if(requestCode==9&&geoCallback!=null){
+   boolean granted=hasLocationPermission();
+   geoCallback.invoke(geoOrigin,granted,false);
+   geoCallback=null;geoOrigin=null;
+  }
+ }
+
+ void startVoice(){
+  SpeechRecognizer r=SpeechRecognizer.createSpeechRecognizer(this);
+  Intent i=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+  i.putExtra(RecognizerIntent.EXTRA_LANGUAGE,"fr-FR");
+  r.setRecognitionListener(new RecognitionListener(){
+   public void onReadyForSpeech(Bundle b){}
+   public void onBeginningOfSpeech(){}
+   public void onRmsChanged(float f){}
+   public void onBufferReceived(byte[]b){}
+   public void onEndOfSpeech(){}
+   public void onError(int e){web.evaluateJavascript("window.__alexiaVoiceError&&window.__alexiaVoiceError()",null);r.destroy();}
+   public void onResults(Bundle b){
+    ArrayList<String>x=b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+    if(x!=null&&!x.isEmpty())web.evaluateJavascript("window.__alexiaVoiceResult("+org.json.JSONObject.quote(x.get(0))+")",null);
+    r.destroy();
+   }
+   public void onPartialResults(Bundle b){}
+   public void onEvent(int t,Bundle b){}
+  });
+  r.startListening(i);
+ }
+
+ @Override protected void onActivityResult(int q,int r,Intent d){
+  super.onActivityResult(q,r,d);
+  if(q==8&&fileCallback!=null){
+   fileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(r,d));
+   fileCallback=null;
+  }
+ }
+
+ @Override protected void onDestroy(){if(tts!=null)tts.shutdown();super.onDestroy();}
+ @Override public void onBackPressed(){if(web.canGoBack())web.goBack();else super.onBackPressed();}
+}
