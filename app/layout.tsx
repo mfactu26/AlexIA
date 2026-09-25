@@ -1,0 +1,1 @@
+import type {Metadata} from "next";import "./globals.css";export const metadata:Metadata={title:"AlexIA",description:"Votre IA personnelle, autonome et toujours disponible"};export default function Layout({children}:{children:React.ReactNode}){return <html lang="fr"><body>{children}</body></html>}
