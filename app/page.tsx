@@ -17,7 +17,14 @@ function cleanVoiceText(t:string){
     .trim();
 }
 function cleanSpeechText(t:string){
-  return t.replace(/\*\*(.*?)\*\*/g,"$1").replace(/[*#_]/g,"").replace(/^\s*[-•]\s*/gm,"").trim();
+  return t
+    .replace(/\*\*(.*?)\*\*/g,"$1")
+    .replace(/[*#_]/g,"")
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu," ")
+    .replace(/[\uFE0F\u200D]/g,"")
+    .replace(/^\s*[-•]\s*/gm,"")
+    .replace(/\s{2,}/g," ")
+    .trim();
 }
 function wantsLocation(t:string){
   return /\b(météo|meteo|quel temps|temps fait|où suis|ou suis|ma position|localisation|près de moi|pres de moi|autour de moi|ici)\b/i.test(t);
