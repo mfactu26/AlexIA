@@ -44,7 +44,7 @@ async function editWithModel(args:{
 }){
   const form=new FormData();
   form.append("model",args.model);
-  form.append("image[]",new Blob([args.bytes],{type:args.mime}),args.filename);
+  const arrayBuffer=args.bytes.buffer.slice(args.bytes.byteOffset,args.bytes.byteOffset+args.bytes.byteLength) as ArrayBuffer;\n  form.append("image[]",new Blob([arrayBuffer],{type:args.mime}),args.filename);
   form.append("prompt",args.prompt);
   if(args.size)form.append("size",args.size);
   if(args.quality)form.append("quality",args.quality);
