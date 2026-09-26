@@ -4,7 +4,7 @@ body{margin:0;background:#07090f;color:#f6f7fb;font-family:Arial,sans-serif}
 button,textarea{font:inherit}
 button{cursor:pointer}
 main{display:grid;grid-template-columns:250px 1fr;min-height:100vh;background:radial-gradient(circle at 80% 0%,#17112d 0,#07090f 34%)}
-aside{padding:28px 20px;border-right:1px solid #202431;background:#0b0e16}
+aside{padding:28px 20px;border-right:1px solid #202431;background:#0b0e16;display:flex;flex-direction:column;height:100vh;overflow:hidden}
 .brand{display:flex;align-items:center;gap:12px}
 .brand-orb,.mini-orb,.orb{display:grid;place-items:center;background:linear-gradient(135deg,#6b5cff,#bb5cff);box-shadow:0 0 38px #725cff55}
 .brand-orb{width:46px;height:46px;border-radius:16px;font-weight:800}
@@ -12,7 +12,18 @@ h1{margin:0;font-size:22px}
 aside p,small{color:#8c93a5}
 .brand p{margin:4px 0 0;font-size:13px}
 nav{display:grid;gap:9px;margin-top:34px}
-.side-status{margin-top:auto;padding:14px;border:1px solid #252d3d;border-radius:16px;background:#111621;display:grid;gap:6px}
+.history-section{margin-top:24px;display:flex;flex-direction:column;min-height:0;flex:1}
+.history-heading{display:flex;align-items:center;justify-content:space-between;padding:0 5px 10px;color:#8c93a5;font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.history-heading span{min-width:24px;height:22px;padding:0 7px;border-radius:999px;background:#171c29;display:grid;place-items:center;color:#a9b0c1;font-size:11px}
+.history-list{display:grid;gap:5px;overflow:auto;padding:1px 2px 12px;scrollbar-width:thin}
+.history-item{width:100%;display:grid;grid-template-columns:22px minmax(0,1fr);align-items:center;gap:7px;padding:10px 9px;background:transparent;border:1px solid transparent;border-radius:11px;color:#c6ccda;text-align:left}
+.history-item span{color:#7f8798;font-size:13px}
+.history-item b{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.history-item:hover{background:#141925;border-color:#242b3a}
+.history-item.active{background:#1d1a31;border-color:#4d3f78;color:#fff}
+.history-item.active span{color:#a68cff}
+.history-empty{margin:4px 6px;color:#697184;font-size:12px;line-height:1.45}
+.side-status{margin-top:10px;padding:14px;border:1px solid #252d3d;border-radius:16px;background:#111621;display:grid;gap:6px;flex:none}
 .side-status b{font-size:13px;color:#c8bcff}.side-status span{font-size:12px;color:#8c93a5;line-height:1.5}
 .mobile-backdrop{display:none}
 button{border:0;border-radius:12px;background:#151925;color:#e9eaff;padding:12px;text-align:left}
@@ -66,7 +77,7 @@ header i{font-size:13px;color:#72e3aa;font-style:normal}
 
 @media(max-width:700px){
   main{grid-template-columns:1fr}
-  aside{display:flex;flex-direction:column;position:fixed;inset:0 auto 0 0;width:min(82vw,300px);height:100dvh;z-index:40;transform:translateX(-105%);transition:transform .22s ease;padding:26px 20px;box-shadow:24px 0 60px #0008}
+  aside{display:flex;flex-direction:column;position:fixed;inset:0 auto 0 0;width:min(86vw,320px);height:100dvh;z-index:40;transform:translateX(-105%);transition:transform .22s ease;padding:26px 20px;box-shadow:24px 0 60px #0008}
   aside.open{transform:translateX(0)}
   .mobile-backdrop{display:block;position:fixed;inset:0;z-index:35;background:#0008;border:0;border-radius:0;padding:0}
   header{height:82px;padding:0 16px;border-bottom-color:#171c28}
