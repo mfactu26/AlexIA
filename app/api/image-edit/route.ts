@@ -33,8 +33,7 @@ async function editImage(args:{key:string;parentModel:string;imageModel:string;p
           {type:"input_image",image_url:args.imageData,detail:"auto"}
         ]
       }],
-      tools:[tool],
-      tool_choice:{type:"image_generation"}
+      tools:[tool]
     })
   });
   const data=await r.json().catch(()=>({}));
@@ -54,6 +53,7 @@ export async function POST(req:Request){
 
     const upscale=wantsUpscale(prompt);
     const instruction=[
+      "Utilise obligatoirement l’outil de génération d’image pour produire une image modifiée à partir de l’image fournie.",
       "Modifie l’image fournie en suivant exactement la demande de l’utilisateur.",
       "Préserve fidèlement tout ce qui n’est pas explicitement demandé : personnes, identité, pose, cadrage, objets, texte et style général.",
       "N’ajoute aucun élément sans demande explicite.",
