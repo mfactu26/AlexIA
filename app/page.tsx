@@ -214,7 +214,12 @@ export default function Home(){
         return;
       }
       const hiddenAt=Number(localStorage.getItem(LAST_HIDDEN_KEY)||"0");
-      if(hiddenAt&&Date.now()-hiddenAt>=INACTIVITY_MS&&messagesRef.current.some(m=>!m.pending)){
+      if(
+        hiddenAt &&
+        Date.now()-hiddenAt>=INACTIVITY_MS &&
+        messagesRef.current.some(m=>!m.pending) &&
+        !messagesRef.current.some(m=>m.pending)
+      ){
         startNewConversation();
       }
     }
