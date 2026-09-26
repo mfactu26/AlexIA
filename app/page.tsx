@@ -304,7 +304,7 @@ export default function Home(){
       {messages.length===0?
         <div className="hero"><div className="orb">A✦</div><h2>Bonjour, je suis AlexIA.</h2><p>Parlez-moi naturellement. Je peux utiliser le GPS, le Web, la voix, des photos et des documents.</p></div>
         :
-        <div className="conversation">{messages.map(m=><div key={m.id} className={"msg "+m.role+(m.pending?" pending":"")}><b>{m.role==="user"?"Vous":"AlexIA"}</b><p>{m.pending?<><span className="thinking-dot">●</span> {m.content}</>:renderMessage(m.content)}</p></div>)}<div ref={end}/></div>
+        <div className="conversation">{messages.map(m=><div key={m.id} className={"msg "+m.role+(m.pending?" pending":"")}><b>{m.role==="user"?"Vous":"AlexIA"}</b><p>{m.pending?<><span className="thinking-dot">●</span> {m.content}</>:renderMessage(m.content)}</p>{m.image?<div className="message-image-wrap"><img className="message-image" src={m.image} alt={m.role==="user"?"Photo envoyée":"Photo modifiée par AlexIA"}/>{m.downloadName?<a className="image-download" href={m.image} download={m.downloadName}>Télécharger</a>:null}</div>:null}</div>)}<div ref={end}/></div>
       }
 
       <div className="quick-actions" aria-label="Fonctions rapides">
