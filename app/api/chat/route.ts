@@ -10,7 +10,7 @@ function allowed(req:Request){
   const ip=req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()||"local";
   const now=Date.now(),slot=hits.get(ip);
   if(!slot||slot.reset<now){hits.set(ip,{count:1,reset:now+60000});return true}
-  if(slot.count>=20)return false;
+  if(slot.count>=30)return false;
   slot.count++;
   return true;
 }
@@ -36,7 +36,7 @@ function extractPlace(history:Msg[]){
 async function reversePlace(loc:Loc){
   try{
     const url=`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(loc.lat)}&lon=${encodeURIComponent(loc.lon)}&zoom=10&accept-language=fr`;
-    const r=await fetch(url,{headers:{"User-Agent":"AlexIA/1.2 personal assistant"}});
+    const r=await fetch(url,{headers:{"User-Agent":"AlexIA/1.3 personal assistant"}});
     if(!r.ok)return "";
     const d=await r.json();
     const a=d?.address||{};
@@ -86,6 +86,14 @@ async function weatherContext(lat:number,lon:number,label:string){
     ].filter(Boolean).join(" ");
   }catch{return ""}
 }
+function extractOutputText(response:any){
+  if(typeof response?.output_text==="string"&&response.output_text)return response.output_text;
+  return (response?.output||[])
+    .flatMap((o:any)=>o?.content||[])
+    .filter((c:any)=>c?.type==="output_text")
+    .map((c:any)=>c?.text||"")
+    .join("\n");
+}
 
 export async function POST(req:Request){
   try{
@@ -95,13 +103,14 @@ export async function POST(req:Request){
 
     const body=await req.json();
     const raw:Msg[]=Array.isArray(body.messages)?body.messages:[];
-    const history=raw.slice(-30).filter(m=>(m.role==="user"||m.role==="assistant")&&typeof m.content==="string").map(m=>({role:m.role,content:m.content.slice(0,12000)}));
+    const history=raw.slice(-24).filter(m=>(m.role==="user"||m.role==="assistant")&&typeof m.content==="string").map(m=>({role:m.role,content:m.content.slice(0,10000)}));
     if(!history.length)return NextResponse.json({error:"Message manquant."},{status:400});
 
     const atts:Att[]=Array.isArray(body.attachments)?body.attachments.slice(0,4):[];
     const last=history[history.length-1];
     const weather=isWeatherQuestion(last.content);
     const locationQuestion=isLocationQuestion(last.content);
+    const forceWebSearch=Boolean(body.forceWebSearch);
     let loc=safeLocation(body.location);
     let locationLabel="";
     const context:string[]=[];
@@ -135,17 +144,98 @@ export async function POST(req:Request){
     const mode=body.mode==="Work"?"Work":"Chat";
     const base=mode==="Work"
       ?"Tu es AlexIA en mode Work. Analyse aussi les pièces jointes. Structure les missions, sois factuelle et ne prétends jamais avoir exécuté une action non exécutée. Réponds en français."
-      :"Tu es AlexIA, une IA personnelle utile, concise et fiable. Analyse les images et documents joints quand ils sont présents. Réponds en français par défaut.";
+      :"Tu es AlexIA, une IA personnelle utile, rapide, concise et fiable. Analyse les images et documents joints quand ils sont présents. Réponds en français par défaut.";
     const live=context.length
       ?"\nContexte temps réel fourni par l'application, à utiliser comme source prioritaire pour cette réponse: "+context.join(" ")+" Ne dis pas que tu n'as pas accès à la localisation ou à la météo si ces données sont présentes."
       :"\nSi une donnée temps réel n'est réellement pas disponible, dis-le brièvement sans inventer.";
-    const instructions=base+live+"\nTu peux utiliser un peu de Markdown pour la lisibilité, mais reste naturel et concis.";
+    const web=forceWebSearch
+      ?"\nLa recherche Web est explicitement activée pour cette demande: utilise l'outil web_search avant de répondre et privilégie les informations actuelles."
+      :"\nTu disposes de web_search. Utilise-le automatiquement lorsqu'une information actuelle, vérifiable sur Internet ou postérieure à tes connaissances internes est nécessaire.";
+    const instructions=base+live+web+"\nReste naturel et va directement à l'essentiel.";
 
-    const q=await fetch("https://api.openai.com/v1/responses",{method:"POST",headers:{Authorization:`Bearer ${key}`,"Content-Type":"application/json"},body:JSON.stringify({model:process.env.OPENAI_MODEL||"gpt-5.6",instructions,input,max_output_tokens:1800})});
-    const data=await q.json();
-    if(!q.ok)return NextResponse.json({error:data?.error?.message||"Erreur du fournisseur IA"},{status:q.status});
-    const reply=data.output_text||data.output?.flatMap((o:any)=>o.content||[]).filter((c:any)=>c.type==="output_text").map((c:any)=>c.text||"").join("\n")||"Je n'ai pas reçu de réponse exploitable.";
-    return NextResponse.json({reply});
+    const upstream=await fetch("https://api.openai.com/v1/responses",{
+      method:"POST",
+      headers:{Authorization:`Bearer ${key}`,"Content-Type":"application/json"},
+      body:JSON.stringify({
+        model:process.env.OPENAI_MODEL||"gpt-5.6",
+        instructions,
+        input,
+        tools:[{type:"web_search"}],
+        tool_choice:"auto",
+        max_output_tokens:1800,
+        stream:true
+      })
+    });
+
+    if(!upstream.ok){
+      let message="Erreur du fournisseur IA";
+      try{
+        const data=await upstream.json();
+        message=data?.error?.message||message;
+      }catch{}
+      return NextResponse.json({error:message},{status:upstream.status});
+    }
+    if(!upstream.body)return NextResponse.json({error:"Flux IA indisponible."},{status:502});
+
+    const reader=upstream.body.getReader();
+    const decoder=new TextDecoder();
+    const encoder=new TextEncoder();
+
+    const stream=new ReadableStream({
+      async start(controller){
+        let buffer="";
+        let emitted=false;
+        let completedText="";
+        const processLine=(line:string)=>{
+          const trimmed=line.trim();
+          if(!trimmed.startsWith("data:"))return;
+          const payload=trimmed.slice(5).trim();
+          if(!payload||payload==="[DONE]")return;
+          try{
+            const event=JSON.parse(payload);
+            if(event?.type==="response.output_text.delta"&&typeof event.delta==="string"){
+              emitted=true;
+              controller.enqueue(encoder.encode(event.delta));
+            }else if(event?.type==="response.completed"){
+              completedText=extractOutputText(event.response);
+            }else if(event?.type==="error"){
+              throw new Error(event?.error?.message||"Erreur pendant la réponse.");
+            }
+          }catch(err){
+            if(err instanceof SyntaxError)return;
+            throw err;
+          }
+        };
+
+        try{
+          while(true){
+            const {value,done}=await reader.read();
+            if(done)break;
+            buffer+=decoder.decode(value,{stream:true});
+            const lines=buffer.split("\n");
+            buffer=lines.pop()||"";
+            for(const line of lines)processLine(line);
+          }
+          buffer+=decoder.decode();
+          if(buffer)processLine(buffer);
+          if(!emitted&&completedText)controller.enqueue(encoder.encode(completedText));
+          if(!emitted&&!completedText)controller.enqueue(encoder.encode("Je n'ai pas reçu de réponse exploitable."));
+          controller.close();
+        }catch(err){
+          const message=err instanceof Error?err.message:"Erreur de flux";
+          controller.enqueue(encoder.encode("\n\nJe n’ai pas pu terminer la réponse : "+message));
+          controller.close();
+        }
+      }
+    });
+
+    return new Response(stream,{
+      headers:{
+        "Content-Type":"text/plain; charset=utf-8",
+        "Cache-Control":"no-cache, no-transform",
+        "X-Accel-Buffering":"no"
+      }
+    });
   }catch{
     return NextResponse.json({error:"Impossible de traiter la demande."},{status:500});
   }
