@@ -226,7 +226,7 @@ export default function Home(){
       if(document.hidden)return;
       const lastActivity=Number(localStorage.getItem(LAST_ACTIVITY_KEY)||"0");
       const hiddenAt=Number(localStorage.getItem(LAST_HIDDEN_KEY)||"0");
-      const reference=Math.max(lastActivity,hiddenAt);
+      const reference=lastActivity||hiddenAt;
       if(
         reference>0 &&
         Date.now()-reference>=INACTIVITY_MS &&
