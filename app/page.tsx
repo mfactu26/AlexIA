@@ -6,6 +6,14 @@ type Att={name:string;type:string;data:string;width?:number;height?:number};
 type Loc={lat:number;lon:number;accuracy?:number};
 type SpeechRecognitionEventLike={results:{[key:number]:{[key:number]:{transcript:string}}}};
 type SendOptions={forceLocation?:boolean;forceWebSearch?:boolean};
+type StoredMsg={role:"user"|"assistant";content:string};
+type Conversation={id:string;title:string;messages:StoredMsg[];updatedAt:number};
+
+const CONVERSATIONS_KEY="alexia-conversations-v2";
+const ACTIVE_CONVERSATION_KEY="alexia-active-conversation-v2";
+const LAST_ACTIVITY_KEY="alexia-last-activity-v2";
+const LAST_HIDDEN_KEY="alexia-last-hidden-v2";
+const INACTIVITY_MS=10*60*1000;
 
 function uid(prefix:string){
   try{return prefix+crypto.randomUUID()}catch{return prefix+Date.now()+"-"+Math.random().toString(36).slice(2)}
@@ -82,6 +90,34 @@ function normalizeStored(raw:any):Msg[]{
     .filter((m:any)=>(m?.role==="user"||m?.role==="assistant")&&typeof m?.content==="string")
     .map((m:any)=>({id:uid("old-"),role:m.role,content:m.content}));
 }
+function storedMessages(raw:Msg[]):StoredMsg[]{
+  return raw
+    .filter(m=>!m.pending)
+    .map(({role,content})=>({role,content}));
+}
+function conversationTitle(messages:StoredMsg[]){
+  const first=messages.find(m=>m.role==="user"&&m.content.trim())?.content.trim()||"Nouvelle conversation";
+  const singleLine=first.replace(/\s+/g," ");
+  return singleLine.length>42?singleLine.slice(0,41)+"…":singleLine;
+}
+function normalizeConversations(raw:any):Conversation[]{
+  if(!Array.isArray(raw))return [];
+  return raw.flatMap((item:any)=>{
+    if(!item||typeof item.id!=="string"||!Array.isArray(item.messages))return [];
+    const messages=item.messages
+      .filter((m:any)=>(m?.role==="user"||m?.role==="assistant")&&typeof m?.content==="string")
+      .map((m:any)=>({role:m.role,content:m.content})) as StoredMsg[];
+    return [{
+      id:item.id,
+      title:typeof item.title==="string"&&item.title.trim()?item.title.trim():conversationTitle(messages),
+      messages,
+      updatedAt:Number.isFinite(Number(item.updatedAt))?Number(item.updatedAt):Date.now(),
+    }];
+  }).sort((a,b)=>b.updatedAt-a.updatedAt);
+}
+function blankConversation():Conversation{
+  return {id:uid("c-"),title:"Nouvelle conversation",messages:[],updatedAt:Date.now()};
+}
 
 export default function Home(){
   const[mode,setMode]=useState<"Chat"|"Work">("Chat");
@@ -95,8 +131,13 @@ export default function Home(){
   const[locationState,setLocationState]=useState<"idle"|"ok"|"denied">("idle");
   const[webSearchNext,setWebSearchNext]=useState(false);
   const[menuOpen,setMenuOpen]=useState(false);
+  const[conversations,setConversations]=useState<Conversation[]>([]);
+  const[activeConversationId,setActiveConversationId]=useState("");
   const end=useRef<HTMLDivElement>(null);
   const messagesRef=useRef<Msg[]>([]);
+  const conversationsRef=useRef<Conversation[]>([]);
+  const activeConversationIdRef=useRef("");
+  const initializedRef=useRef(false);
   const lastImageRef=useRef<Att|undefined>(undefined);
   const photoInput=useRef<HTMLInputElement>(null);
 
@@ -108,16 +149,78 @@ export default function Home(){
 
   useEffect(()=>{
     try{
-      const loaded=normalizeStored(JSON.parse(localStorage.getItem("alexia-history")||"[]"));
+      const now=Date.now();
+      let list=normalizeConversations(JSON.parse(localStorage.getItem(CONVERSATIONS_KEY)||"[]"));
+      const legacy=normalizeStored(JSON.parse(localStorage.getItem("alexia-history")||"[]"));
+      if(!list.length&&legacy.length){
+        const legacyStored=storedMessages(legacy);
+        list=[{id:uid("c-"),title:conversationTitle(legacyStored),messages:legacyStored,updatedAt:now}];
+        localStorage.removeItem("alexia-history");
+      }
+
+      const lastActivity=Number(localStorage.getItem(LAST_ACTIVITY_KEY)||"0");
+      const stale=lastActivity>0&&now-lastActivity>=INACTIVITY_MS;
+      const requestedId=localStorage.getItem(ACTIVE_CONVERSATION_KEY)||"";
+      let active=list.find(item=>item.id===requestedId)||list[0];
+
+      if(!active||stale&&active.messages.length>0){
+        const fresh=blankConversation();
+        list=[fresh,...list];
+        active=fresh;
+      }
+
+      conversationsRef.current=list;
+      activeConversationIdRef.current=active.id;
+      setConversations(list);
+      setActiveConversationId(active.id);
+      const loaded=normalizeStored(active.messages);
       messagesRef.current=loaded;
       setMessages(loaded);
-    }catch{}
+      localStorage.setItem(CONVERSATIONS_KEY,JSON.stringify(list));
+      localStorage.setItem(ACTIVE_CONVERSATION_KEY,active.id);
+      localStorage.setItem(LAST_ACTIVITY_KEY,String(now));
+    }catch{
+      const fresh=blankConversation();
+      conversationsRef.current=[fresh];
+      activeConversationIdRef.current=fresh.id;
+      setConversations([fresh]);
+      setActiveConversationId(fresh.id);
+    }finally{
+      initializedRef.current=true;
+    }
   },[]);
+
   useEffect(()=>{
-    const saved=messages.filter(m=>!m.pending).map(({role,content})=>({role,content}));
-    localStorage.setItem("alexia-history",JSON.stringify(saved));
+    if(!initializedRef.current||!activeConversationId)return;
+    const saved=storedMessages(messages);
+    const now=Date.now();
+    const next=conversationsRef.current
+      .map(item=>item.id===activeConversationId
+        ?{...item,title:conversationTitle(saved),messages:saved,updatedAt:saved.length?now:item.updatedAt}
+        :item)
+      .sort((a,b)=>b.updatedAt-a.updatedAt);
+    conversationsRef.current=next;
+    setConversations(next);
+    localStorage.setItem(CONVERSATIONS_KEY,JSON.stringify(next));
+    localStorage.setItem(ACTIVE_CONVERSATION_KEY,activeConversationId);
+    if(saved.length)localStorage.setItem(LAST_ACTIVITY_KEY,String(now));
     end.current?.scrollIntoView({behavior:"smooth"});
-  },[messages]);
+  },[messages,activeConversationId]);
+
+  useEffect(()=>{
+    function onVisibility(){
+      if(document.hidden){
+        localStorage.setItem(LAST_HIDDEN_KEY,String(Date.now()));
+        return;
+      }
+      const hiddenAt=Number(localStorage.getItem(LAST_HIDDEN_KEY)||"0");
+      if(hiddenAt&&Date.now()-hiddenAt>=INACTIVITY_MS&&messagesRef.current.some(m=>!m.pending)){
+        startNewConversation();
+      }
+    }
+    document.addEventListener("visibilitychange",onVisibility);
+    return()=>document.removeEventListener("visibilitychange",onVisibility);
+  },[]);
 
   function speak(text:string){
     if(!voice||typeof window==="undefined")return;
@@ -279,15 +382,59 @@ export default function Home(){
     x.start();
   }
 
-  function reset(){
+  function startNewConversation(){
+    if(pendingCount>0){
+      setError("Une réponse est encore en cours. Termine-la avant de changer de conversation.");
+      setMenuOpen(false);
+      return;
+    }
+    if(!messagesRef.current.some(m=>!m.pending)){
+      setMenuOpen(false);
+      setInput("");
+      setFiles([]);
+      lastImageRef.current=undefined;
+      return;
+    }
+    const fresh=blankConversation();
+    const next=[fresh,...conversationsRef.current];
+    conversationsRef.current=next;
+    activeConversationIdRef.current=fresh.id;
+    setConversations(next);
+    setActiveConversationId(fresh.id);
     messagesRef.current=[];
     setMessages([]);
+    setInput("");
     setFiles([]);
-    setPendingCount(0);
     setWebSearchNext(false);
     setMenuOpen(false);
     lastImageRef.current=undefined;
-    localStorage.removeItem("alexia-history");
+    localStorage.setItem(CONVERSATIONS_KEY,JSON.stringify(next));
+    localStorage.setItem(ACTIVE_CONVERSATION_KEY,fresh.id);
+    localStorage.setItem(LAST_ACTIVITY_KEY,String(Date.now()));
+    window.speechSynthesis?.cancel();
+  }
+
+  function openConversation(id:string){
+    if(id===activeConversationIdRef.current){setMenuOpen(false);return}
+    if(pendingCount>0){
+      setError("Une réponse est encore en cours. Termine-la avant d’ouvrir une autre conversation.");
+      setMenuOpen(false);
+      return;
+    }
+    const chosen=conversationsRef.current.find(item=>item.id===id);
+    if(!chosen)return;
+    activeConversationIdRef.current=id;
+    setActiveConversationId(id);
+    const loaded=normalizeStored(chosen.messages);
+    messagesRef.current=loaded;
+    setMessages(loaded);
+    setInput("");
+    setFiles([]);
+    setWebSearchNext(false);
+    setMenuOpen(false);
+    lastImageRef.current=undefined;
+    localStorage.setItem(ACTIVE_CONVERSATION_KEY,id);
+    localStorage.setItem(LAST_ACTIVITY_KEY,String(Date.now()));
     window.speechSynthesis?.cancel();
   }
 
@@ -309,8 +456,25 @@ export default function Home(){
       <nav>
         <button className={mode==="Chat"?"active":""} onClick={()=>{setMode("Chat");setMenuOpen(false)}}>💬 Chat</button>
         <button className={mode==="Work"?"active":""} onClick={()=>{setMode("Work");setMenuOpen(false)}}>⚡ Work</button>
-        <button onClick={reset}>◷ Nouvelle conversation</button>
+        <button onClick={startNewConversation}>＋ Nouvelle conversation</button>
       </nav>
+      <div className="history-section">
+        <div className="history-heading"><b>Historique</b><span>{conversations.filter(item=>item.messages.length>0).length}</span></div>
+        <div className="history-list">
+          {conversations.filter(item=>item.messages.length>0).map(item=>
+            <button
+              type="button"
+              key={item.id}
+              className={"history-item"+(item.id===activeConversationId?" active":"")}
+              onClick={()=>openConversation(item.id)}
+              title={item.title}
+            >
+              <span>◷</span><b>{item.title}</b>
+            </button>
+          )}
+          {conversations.every(item=>item.messages.length===0)?<p className="history-empty">Vos conversations apparaîtront ici.</p>:null}
+        </div>
+      </div>
       <div className="side-status"><b>Fonctions actives</b><span>GPS • Web • Voix • Photos • Documents</span></div>
     </aside>
     {menuOpen?<button className="mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMenuOpen(false)}/>:null}
