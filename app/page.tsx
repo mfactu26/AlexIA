@@ -13,7 +13,7 @@ const CONVERSATIONS_KEY="alexia-conversations-v2";
 const ACTIVE_CONVERSATION_KEY="alexia-active-conversation-v2";
 const LAST_ACTIVITY_KEY="alexia-last-activity-v2";
 const LAST_HIDDEN_KEY="alexia-last-hidden-v2";
-const INACTIVITY_MS=10*60*1000;
+const INACTIVITY_MS=5*60*1000;
 
 function uid(prefix:string){
   try{return prefix+crypto.randomUUID()}catch{return prefix+Date.now()+"-"+Math.random().toString(36).slice(2)}
@@ -152,6 +152,11 @@ export default function Home(){
     setMessages(next);
   }
 
+  function markActivity(){
+    if(typeof window==="undefined")return;
+    localStorage.setItem(LAST_ACTIVITY_KEY,String(Date.now()));
+  }
+
   useEffect(()=>{
     try{
       const now=Date.now();
@@ -164,11 +169,12 @@ export default function Home(){
       }
 
       const lastActivity=Number(localStorage.getItem(LAST_ACTIVITY_KEY)||"0");
-      const stale=lastActivity>0&&now-lastActivity>=INACTIVITY_MS;
       const requestedId=localStorage.getItem(ACTIVE_CONVERSATION_KEY)||"";
       let active=list.find(item=>item.id===requestedId)||list[0];
+      const activityAt=lastActivity||active?.updatedAt||now;
+      const stale=Boolean(active&&active.messages.length>0&&now-activityAt>=INACTIVITY_MS);
 
-      if(!active||stale&&active.messages.length>0){
+      if(!active||stale){
         const fresh=blankConversation();
         list=[fresh,...list];
         active=fresh;
@@ -213,24 +219,58 @@ export default function Home(){
   },[messages,activeConversationId]);
 
   useEffect(()=>{
-    function onVisibility(){
-      if(document.hidden){
-        localStorage.setItem(LAST_HIDDEN_KEY,String(Date.now()));
-        return;
-      }
+    function markHidden(){
+      localStorage.setItem(LAST_HIDDEN_KEY,String(Date.now()));
+    }
+    function openFreshIfInactive(){
+      if(document.hidden)return;
+      const lastActivity=Number(localStorage.getItem(LAST_ACTIVITY_KEY)||"0");
       const hiddenAt=Number(localStorage.getItem(LAST_HIDDEN_KEY)||"0");
+      const reference=Math.max(lastActivity,hiddenAt);
       if(
-        hiddenAt &&
-        Date.now()-hiddenAt>=INACTIVITY_MS &&
+        reference>0 &&
+        Date.now()-reference>=INACTIVITY_MS &&
         messagesRef.current.some(m=>!m.pending) &&
         !messagesRef.current.some(m=>m.pending)
       ){
         startNewConversation();
       }
     }
+    function onVisibility(){
+      if(document.hidden)markHidden();
+      else openFreshIfInactive();
+    }
     document.addEventListener("visibilitychange",onVisibility);
-    return()=>document.removeEventListener("visibilitychange",onVisibility);
-  },[]);
+    window.addEventListener("pagehide",markHidden);
+    window.addEventListener("pageshow",openFreshIfInactive);
+    window.addEventListener("focus",openFreshIfInactive);
+    return()=>{
+      document.removeEventListener("visibilitychange",onVisibility);
+      window.removeEventListener("pagehide",markHidden);
+      window.removeEventListener("pageshow",openFreshIfInactive);
+      window.removeEventListener("focus",openFreshIfInactive);
+    };
+  },[pendingCount,activeConversationId]);
+
+  useEffect(()=>{
+    if(!initializedRef.current||!activeConversationId||pendingCount>0)return;
+    if(!messagesRef.current.some(m=>!m.pending))return;
+    if(input.trim()||files.length>0)return;
+
+    const lastActivity=Number(localStorage.getItem(LAST_ACTIVITY_KEY)||String(Date.now()));
+    const remaining=Math.max(0,INACTIVITY_MS-(Date.now()-lastActivity));
+    const timer=window.setTimeout(()=>{
+      if(
+        !messagesRef.current.some(m=>m.pending) &&
+        messagesRef.current.some(m=>!m.pending) &&
+        !input.trim() &&
+        files.length===0
+      ){
+        startNewConversation();
+      }
+    },remaining+150);
+    return()=>window.clearTimeout(timer);
+  },[messages,activeConversationId,pendingCount,input,files.length]);
 
   function speak(text:string){
     if(typeof window==="undefined")return;
@@ -258,6 +298,7 @@ export default function Home(){
 
   async function addFiles(list:FileList|null){
     if(!list)return;
+    markActivity();
     setError("");
     const chosen=Array.from(list).slice(0,4);
     const out:Att[]=[];
@@ -271,6 +312,7 @@ export default function Home(){
 
   async function send(e?:FormEvent,spoken?:string,options:SendOptions={}){
     e?.preventDefault();
+    markActivity();
     const text=cleanVoiceText(spoken??input);
     const attachments=[...files];
     if(!text&&!attachments.length)return;
@@ -389,6 +431,7 @@ export default function Home(){
         readLastReply();
         return;
       }
+      markActivity();
       setInput(spoken);
       setTimeout(()=>document.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus(),0);
     };
@@ -413,6 +456,7 @@ export default function Home(){
         readLastReply();
         return;
       }
+      markActivity();
       setInput(spoken);
       setTimeout(()=>document.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus(),0);
     };
@@ -543,7 +587,7 @@ export default function Home(){
           :<button type="button" key={i} onClick={()=>setFiles(v=>v.filter((_,j)=>j!==i))}>📎 {f.name} ×</button>)}</div>}
         <textarea
           value={input}
-          onChange={e=>setInput(e.target.value)}
+          onChange={e=>{markActivity();setInput(e.target.value)}}
           onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();send()}}}
           placeholder={listening?"Je vous écoute…":files.some(f=>f.type.startsWith("image/"))?"Que veux-tu faire avec cette photo ?":pendingCount>0?"Posez une autre question…":webSearchNext?"Rechercher sur le Web…":"Écrivez ou parlez à AlexIA…"}
         />
