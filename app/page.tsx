@@ -61,7 +61,8 @@ export default function Home(){
   const[voice,setVoice]=useState(true);
   const[files,setFiles]=useState<Att[]>([]);
   const[locationState,setLocationState]=useState<"idle"|"ok"|"denied">("idle");
-  const[webSearchNext,setWebSearchNext]=useState(false);\n  const[menuOpen,setMenuOpen]=useState(false);
+  const[webSearchNext,setWebSearchNext]=useState(false);
+  const[menuOpen,setMenuOpen]=useState(false);
   const end=useRef<HTMLDivElement>(null);
   const messagesRef=useRef<Msg[]>([]);
   const photoInput=useRef<HTMLInputElement>(null);
@@ -215,6 +216,7 @@ export default function Home(){
     setFiles([]);
     setPendingCount(0);
     setWebSearchNext(false);
+    setMenuOpen(false);
     localStorage.removeItem("alexia-history");
     window.speechSynthesis?.cancel();
   }
@@ -232,10 +234,16 @@ export default function Home(){
     :"Voix • GPS • photos • documents • Web";
 
   return <main>
-    <aside>
+    <aside className={menuOpen?"open":""}>
       <div className="brand"><div className="brand-orb">A✦</div><div><h1>AlexIA</h1><p>Votre IA personnelle</p></div></div>
-      <nav><button className={mode==="Chat"?"active":""} onClick={()=>setMode("Chat")}>💬 Chat</button><button className={mode==="Work"?"active":""} onClick={()=>setMode("Work")}>⚡ Work</button><button onClick={reset}>◷ Nouvelle conversation</button><button>⌘ Connexions</button></nav>
+      <nav>
+        <button className={mode==="Chat"?"active":""} onClick={()=>{setMode("Chat");setMenuOpen(false)}}>💬 Chat</button>
+        <button className={mode==="Work"?"active":""} onClick={()=>{setMode("Work");setMenuOpen(false)}}>⚡ Work</button>
+        <button onClick={reset}>◷ Nouvelle conversation</button>
+      </nav>
+      <div className="side-status"><b>Fonctions actives</b><span>GPS • Web • Voix • Photos • Documents</span></div>
     </aside>
+    {menuOpen?<button className="mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMenuOpen(false)}/>:null}
     <section>
       <header>
         <button type="button" className="mobile-menu" aria-label="Ouvrir le menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(v=>!v)}>☰</button>
