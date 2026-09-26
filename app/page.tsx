@@ -149,10 +149,21 @@ export default function Home(){
     const attachments=[...files];
     if(!text&&!attachments.length)return;
 
-    const shown=text||(attachments.length?"Analyse "+attachments.map(f=>f.name).join(", "):"");
-    const requestId=uid("req-");
     const attachedImage=attachments.find(a=>a.type.startsWith("image/"));
     if(attachedImage)lastImageRef.current=attachedImage;
+
+    // Une photo envoyée seule est simplement conservée. AlexIA attend la consigne
+    // au lieu de lancer automatiquement une analyse visuelle.
+    if(!text&&attachedImage){
+      const userMsg:Msg={id:uid("u-"),role:"user",content:"Photo ajoutée",image:attachedImage.data};
+      commitMessages(prev=>[...prev,userMsg]);
+      setFiles([]);
+      setError("");
+      return;
+    }
+
+    const shown=text||(attachments.length?"Pièce jointe ajoutée": "");
+    const requestId=uid("req-");
     const editSource=attachedImage||lastImageRef.current;
     const imageEdit=Boolean(text&&editSource&&wantsImageEdit(text));
     const userMsg:Msg={id:uid("u-"),role:"user",content:shown,image:attachedImage?.data};
