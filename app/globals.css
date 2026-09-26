@@ -2,31 +2,44 @@
 html,body{height:100%}
 body{margin:0;background:#07090f;color:#f6f7fb;font-family:Arial,sans-serif}
 button,textarea{font:inherit}
-main{display:grid;grid-template-columns:250px 1fr;min-height:100vh;background:radial-gradient(circle at 80% 0%,#15112a 0,#07090f 35%)}
-aside{padding:32px 22px;border-right:1px solid #202431;background:#0b0e16}
-.logo{font-size:36px;font-weight:800}.logo span{color:#8d79ff}
-h1{margin:12px 0 3px;font-size:22px}
+button{cursor:pointer}
+main{display:grid;grid-template-columns:250px 1fr;min-height:100vh;background:radial-gradient(circle at 80% 0%,#17112d 0,#07090f 34%)}
+aside{padding:28px 20px;border-right:1px solid #202431;background:#0b0e16}
+.brand{display:flex;align-items:center;gap:12px}
+.brand-orb,.mini-orb,.orb{display:grid;place-items:center;background:linear-gradient(135deg,#6b5cff,#bb5cff);box-shadow:0 0 38px #725cff55}
+.brand-orb{width:46px;height:46px;border-radius:16px;font-weight:800}
+h1{margin:0;font-size:22px}
 aside p,small{color:#8c93a5}
-nav{display:grid;gap:9px;margin-top:38px}
-button{border:0;border-radius:12px;background:#151925;color:#e9eaff;padding:12px;text-align:left;cursor:pointer}
+.brand p{margin:4px 0 0;font-size:13px}
+nav{display:grid;gap:9px;margin-top:34px}
+button{border:0;border-radius:12px;background:#151925;color:#e9eaff;padding:12px;text-align:left}
 button:disabled{opacity:.5}
-nav button:hover,.chips button:hover,button.active{background:#242a3b}
+nav button:hover,button.active{background:#242a3b}
 section{display:flex;flex-direction:column;height:100vh;min-width:0}
-header{height:76px;flex:none;border-bottom:1px solid #202431;display:flex;align-items:center;justify-content:space-between;padding:0 34px;background:#090c13dd;backdrop-filter:blur(14px)}
-header div{display:grid;gap:4px}
+header{height:76px;flex:none;border-bottom:1px solid #202431;display:flex;align-items:center;justify-content:space-between;padding:0 30px;background:#090c13dd;backdrop-filter:blur(14px)}
+.header-brand{display:flex;align-items:center;gap:11px}
+.header-brand>div:last-child{display:grid;gap:3px}
+.header-brand b{font-size:20px}
+.header-brand b span{color:#9e86ff}
+.mini-orb{width:36px;height:36px;border-radius:50%;font-weight:800}
 header i{font-size:13px;color:#72e3aa;font-style:normal}
+.mobile-menu{display:none}
 .hero{max-width:780px;margin:auto;text-align:center;padding:60px 30px}
-.orb{margin:auto;width:82px;height:82px;border-radius:28px;display:grid;place-items:center;font-size:25px;font-weight:bold;background:linear-gradient(135deg,#745cff,#b65cff);box-shadow:0 0 70px #725cff55}
+.orb{margin:auto;width:82px;height:82px;border-radius:28px;font-size:25px;font-weight:bold}
 .hero h2{font-size:36px;margin-bottom:12px}
 .hero p{color:#aab0c0;line-height:1.6}
-.chips{display:flex;gap:10px;justify-content:center;margin-top:30px;flex-wrap:wrap}
-.chips button{border:1px solid #2b3141}
 .conversation{width:min(850px,92%);margin:0 auto;flex:1;overflow:auto;padding:28px 0 12px;scrollbar-width:thin}
 .msg{max-width:82%;padding:16px 18px;margin:0 0 14px;border-radius:20px;background:linear-gradient(180deg,#131824,#10141e);border:1px solid #252d3d;box-shadow:0 10px 26px #0000001c}
-.msg.user{margin-left:auto;background:linear-gradient(180deg,#201938,#19142d);border-color:#3b3069}
-.msg b{font-size:13px;color:#a99cff}
+.msg.user{margin-left:auto;background:linear-gradient(180deg,#241946,#1b1432);border-color:#4e3c8b}
+.msg b{font-size:13px;color:#aa92ff}
 .msg p{white-space:pre-wrap;line-height:1.58;margin:8px 0 0;font-size:16px}
 .msg p strong{color:#fff;font-weight:700}
+.thinking-dot{color:#8a6cff;animation:pulse 1s infinite ease-in-out}
+@keyframes pulse{50%{opacity:.25}}
+.quick-actions{width:min(850px,94%);margin:0 auto 10px;display:grid;grid-template-columns:repeat(4,1fr);gap:9px;flex:none}
+.quick-actions button{display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;border:1px solid #2b3350;border-radius:18px;background:#111622;color:#dbe0ee;text-align:center}
+.quick-actions button span{font-size:18px;color:#a784ff}
+.quick-actions button:hover,.quick-actions button.active{border-color:#6d55d8;background:#19152d;box-shadow:0 0 0 3px #765cff12}
 .composer{width:min(850px,94%);margin:0 auto 18px;position:relative;flex:none;display:grid;grid-template-columns:auto 1fr auto auto auto;gap:9px;align-items:end;padding:10px;border:1px solid #202737;border-radius:24px;background:#0d111aee;box-shadow:0 16px 45px #00000045;backdrop-filter:blur(14px)}
 .composer textarea{grid-column:2;grid-row:1;width:100%;min-width:0;min-height:58px;max-height:150px;resize:none;border:1px solid #2a3040;border-radius:16px;background:#111621;color:white;padding:17px 16px;outline:none}
 .composer textarea:focus{border-color:#6956d8;box-shadow:0 0 0 3px #765cff18}
@@ -34,28 +47,43 @@ header i{font-size:13px;color:#72e3aa;font-style:normal}
 .composer>.send,.composer>.voice{width:50px;height:50px;display:grid;place-items:center;text-align:center;padding:0;border-radius:15px}
 .composer>.send{background:#765cff;font-size:20px}
 .composer>.mic{background:#765cff}
+.composer>.mic.listening{box-shadow:0 0 0 4px #765cff30,0 0 28px #765cff66}
 .composer>.voice{grid-column:5;grid-row:1;background:#151b28;font-size:20px}
 .composer>.attachments{grid-column:1/-1;grid-row:2;display:flex;gap:6px;flex-wrap:wrap}
 .composer>.attachments button{padding:7px 9px;font-size:12px}
 .composer>small{grid-column:1/-1;grid-row:3;display:block;text-align:center;margin-top:2px}
 .error{color:#ff8585}
+
 @media(max-width:700px){
   main{grid-template-columns:1fr}
   aside{display:none}
-  header{height:76px;padding:0 20px}
-  .hero{padding:40px 22px}
+  header{height:82px;padding:0 16px;border-bottom-color:#171c28}
+  .mobile-menu{display:grid;place-items:center;width:42px;height:42px;border:1px solid #2a3040;border-radius:14px;background:#111621;margin-right:10px}
+  .header-brand{margin-right:auto}
+  .header-brand small{font-size:11px}
+  .mini-orb{width:34px;height:34px}
+  header i{font-size:12px;white-space:nowrap}
+  .hero{padding:30px 22px}
   .hero h2{font-size:29px}
-  .chips{flex-direction:column}
-  .conversation{width:94%;padding-top:24px}
+  .hero p{font-size:15px}
+  .conversation{width:95%;padding-top:18px}
   .msg{max-width:94%;padding:15px 16px;border-radius:18px}
   .msg p{font-size:16px}
-  .composer{width:96%;margin-bottom:10px;grid-template-columns:auto minmax(0,1fr) auto auto;padding:8px;gap:7px;border-radius:20px}
+  .quick-actions{width:96%;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:8px}
+  .quick-actions button{min-width:0;padding:10px 4px;gap:4px;border-radius:15px;font-size:12px;flex-direction:column}
+  .quick-actions button span{font-size:18px}
+  .composer{width:96%;margin-bottom:9px;grid-template-columns:auto minmax(0,1fr) auto auto;padding:8px;gap:7px;border-radius:20px}
   .composer>label{grid-column:1;grid-row:1;padding:8px}
   .composer textarea{grid-column:2;grid-row:1;min-height:56px;padding:16px 12px}
   .composer>.mic{grid-column:3;grid-row:1}
   .composer>.send:not(.mic){grid-column:4;grid-row:1}
   .composer>.voice{grid-column:1;grid-row:2;width:44px;height:40px}
   .composer>.attachments{grid-column:2/-1;grid-row:2}
-  .composer>small{grid-column:1/-1;grid-row:3;font-size:12px}
+  .composer>small{grid-column:1/-1;grid-row:3;font-size:11px}
   .composer>.send{width:48px;height:48px;font-size:21px}
+}
+
+@media(max-width:390px){
+  .quick-actions button{font-size:11px}
+  header i{max-width:92px;overflow:hidden;text-overflow:ellipsis}
 }
