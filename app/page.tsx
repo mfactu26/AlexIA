@@ -5,7 +5,7 @@ type Msg={id:string;role:"user"|"assistant";content:string;pending?:boolean;imag
 type Att={name:string;type:string;data:string;width?:number;height?:number};
 type Loc={lat:number;lon:number;accuracy?:number};
 type SpeechRecognitionEventLike={results:{[key:number]:{[key:number]:{transcript:string}}}};
-type SendOptions={forceLocation?:boolean;forceWebSearch?:boolean};
+type SendOptions={forceLocation?:boolean;forceWebSearch?:boolean;speakReply?:boolean};
 type StoredMsg={role:"user"|"assistant";content:string};
 type Conversation={id:string;title:string;messages:StoredMsg[];updatedAt:number};
 
@@ -317,7 +317,7 @@ export default function Home(){
     const attachments=[...files];
     if(!text&&!attachments.length)return;
 
-    if(text&&!attachments.length&&wantsReadAloud(text)){
+    if(text&&wantsReadAloud(text)){
       setInput("");
       readLastReply();
       return;
@@ -369,6 +369,7 @@ export default function Home(){
         const edited:Att={name:data.filename||"alexia-modifiee.png",type:data.mime||"image/png",data:data.image,width:data.width,height:data.height};
         lastImageRef.current=edited;
         commitMessages(prev=>prev.map(m=>m.id===requestId?{...m,content:"Photo modifiée.",pending:false,image:data.image,downloadName:edited.name}:m));
+        if(options.speakReply)speak("Photo modifiée.");
         return;
       }
 
@@ -395,6 +396,7 @@ export default function Home(){
         const data=await q.json();
         const reply=data.reply||"Je n'ai pas reçu de réponse exploitable.";
         commitMessages(prev=>prev.map(m=>m.id===requestId?{...m,content:reply,pending:false}:m));
+        if(options.speakReply)speak(reply);
         return;
       }
 
@@ -413,6 +415,7 @@ export default function Home(){
       reply+=decoder.decode();
       if(!reply.trim())reply="Je n'ai pas reçu de réponse exploitable.";
       commitMessages(prev=>prev.map(m=>m.id===requestId?{...m,content:reply,pending:false}:m));
+      if(options.speakReply)speak(reply);
     }catch(err){
       const message=err instanceof Error?err.message:"Erreur de connexion";
       commitMessages(prev=>prev.map(m=>m.id===requestId?{...m,content:"Je n’ai pas pu terminer cette demande : "+message,pending:false}:m));
@@ -426,14 +429,9 @@ export default function Home(){
     (window as any).__alexiaVoiceResult=(t:string)=>{
       setListening(false);
       const spoken=cleanVoiceText(t);
-      if(wantsReadAloud(spoken)&&files.length===0){
-        setInput("");
-        readLastReply();
-        return;
-      }
+      if(!spoken)return;
       markActivity();
-      setInput(spoken);
-      setTimeout(()=>document.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus(),0);
+      send(undefined,spoken,{speakReply:true});
     };
     (window as any).__alexiaVoiceError=()=>{setListening(false);setError("Je n’ai pas pu entendre. Réessayez.")};
     return()=>{delete (window as any).__alexiaVoiceResult;delete (window as any).__alexiaVoiceError}
@@ -451,14 +449,9 @@ export default function Home(){
     x.onerror=()=>setError("Je n’ai pas pu entendre.");
     x.onresult=(e:SpeechRecognitionEventLike)=>{
       const spoken=cleanVoiceText(e.results[0][0].transcript);
-      if(wantsReadAloud(spoken)&&files.length===0){
-        setInput("");
-        readLastReply();
-        return;
-      }
+      if(!spoken)return;
       markActivity();
-      setInput(spoken);
-      setTimeout(()=>document.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus(),0);
+      send(undefined,spoken,{speakReply:true});
     };
     x.start();
   }
