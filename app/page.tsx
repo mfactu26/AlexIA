@@ -44,6 +44,12 @@ function wantsImageEdit(t:string){
 function wantsImageAnalysis(t:string){
   return /\b(analy|analyse|analys|décris|decris|décrit|decrit|description|que vois|qu['’]est[- ]ce que tu vois|qu['’]y a[- ]t[- ]il|identif|reconnais|reconnaître|reconnaitre|lis|lire|extrais|extraire|explique.*(?:photo|image)|regarde.*(?:photo|image))\w*/i.test(t);
 }
+function wantsReadAloud(t:string){
+  const s=t.trim().toLowerCase();
+  return /^(?:alexia[, ]*)?(?:lis|lisez|relis|relisez)(?:[- ]?moi)?(?:\s+(?:ça|ca|ceci|la réponse|ta réponse|ton message|le message|la dernière réponse|le dernier message))?(?:\s+à voix haute)?[.!? ]*$/.test(s)
+    || /^(?:alexia[, ]*)?(?:lecture|lis(?:[- ]?moi)?)(?:\s+de)?\s+(?:la réponse|la dernière réponse|le dernier message)\s+à voix haute[.!? ]*$/.test(s)
+    || /^(?:alexia[, ]*)?(?:lis|relis)\s+à voix haute[.!? ]*$/.test(s);
+}
 async function imageFileToAtt(f:File):Promise<Att>{
   const originalData=await new Promise<string>((ok,no)=>{const x=new FileReader();x.onload=()=>ok(String(x.result));x.onerror=()=>no(x.error);x.readAsDataURL(f)});
   if(!f.type.startsWith("image/"))return {name:f.name,type:f.type||"application/octet-stream",data:originalData};
@@ -126,7 +132,6 @@ export default function Home(){
   const[pendingCount,setPendingCount]=useState(0);
   const[error,setError]=useState("");
   const[listening,setListening]=useState(false);
-  const[voice,setVoice]=useState(true);
   const[files,setFiles]=useState<Att[]>([]);
   const[locationState,setLocationState]=useState<"idle"|"ok"|"denied">("idle");
   const[webSearchNext,setWebSearchNext]=useState(false);
@@ -228,7 +233,7 @@ export default function Home(){
   },[]);
 
   function speak(text:string){
-    if(!voice||typeof window==="undefined")return;
+    if(typeof window==="undefined")return;
     const spoken=cleanSpeechText(text);
     if(!spoken)return;
     const a=(window as any).AlexiaAndroid;
@@ -238,6 +243,17 @@ export default function Home(){
     const u=new SpeechSynthesisUtterance(spoken);
     u.lang="fr-FR";
     window.speechSynthesis.speak(u);
+  }
+
+  function readLastReply(){
+    const last=[...messagesRef.current].reverse().find(m=>m.role==="assistant"&&!m.pending&&m.content.trim());
+    if(!last){
+      setError("Il n’y a pas encore de réponse à lire.");
+      return false;
+    }
+    setError("");
+    speak(last.content);
+    return true;
   }
 
   async function addFiles(list:FileList|null){
@@ -258,6 +274,12 @@ export default function Home(){
     const text=cleanVoiceText(spoken??input);
     const attachments=[...files];
     if(!text&&!attachments.length)return;
+
+    if(text&&!attachments.length&&wantsReadAloud(text)){
+      setInput("");
+      readLastReply();
+      return;
+    }
 
     const attachedImage=attachments.find(a=>a.type.startsWith("image/"));
 
@@ -331,7 +353,6 @@ export default function Home(){
         const data=await q.json();
         const reply=data.reply||"Je n'ai pas reçu de réponse exploitable.";
         commitMessages(prev=>prev.map(m=>m.id===requestId?{...m,content:reply,pending:false}:m));
-        speak(reply);
         return;
       }
 
@@ -350,7 +371,6 @@ export default function Home(){
       reply+=decoder.decode();
       if(!reply.trim())reply="Je n'ai pas reçu de réponse exploitable.";
       commitMessages(prev=>prev.map(m=>m.id===requestId?{...m,content:reply,pending:false}:m));
-      speak(reply);
     }catch(err){
       const message=err instanceof Error?err.message:"Erreur de connexion";
       commitMessages(prev=>prev.map(m=>m.id===requestId?{...m,content:"Je n’ai pas pu terminer cette demande : "+message,pending:false}:m));
@@ -363,12 +383,18 @@ export default function Home(){
   useEffect(()=>{
     (window as any).__alexiaVoiceResult=(t:string)=>{
       setListening(false);
-      setInput(cleanVoiceText(t));
+      const spoken=cleanVoiceText(t);
+      if(wantsReadAloud(spoken)&&files.length===0){
+        setInput("");
+        readLastReply();
+        return;
+      }
+      setInput(spoken);
       setTimeout(()=>document.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus(),0);
     };
     (window as any).__alexiaVoiceError=()=>{setListening(false);setError("Je n’ai pas pu entendre. Réessayez.")};
     return()=>{delete (window as any).__alexiaVoiceResult;delete (window as any).__alexiaVoiceError}
-  },[mode,files,voice,webSearchNext]);
+  },[mode,files,webSearchNext]);
 
   function listen(){
     const a=(window as any).AlexiaAndroid;
@@ -381,7 +407,13 @@ export default function Home(){
     x.onend=()=>setListening(false);
     x.onerror=()=>setError("Je n’ai pas pu entendre.");
     x.onresult=(e:SpeechRecognitionEventLike)=>{
-      setInput(cleanVoiceText(e.results[0][0].transcript));
+      const spoken=cleanVoiceText(e.results[0][0].transcript);
+      if(wantsReadAloud(spoken)&&files.length===0){
+        setInput("");
+        readLastReply();
+        return;
+      }
+      setInput(spoken);
       setTimeout(()=>document.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus(),0);
     };
     x.start();
@@ -517,7 +549,7 @@ export default function Home(){
         />
         <button type="button" className={"send mic"+(listening?" listening":"")} onClick={listen} aria-label="Parler">{listening?"◉":"🎤"}</button>
         <button className="send" aria-label="Envoyer" disabled={files.some(f=>f.type.startsWith("image/"))&&!input.trim()}>➜</button>
-        <button type="button" className="voice" onClick={()=>setVoice(v=>!v)} aria-label="Activer ou couper la voix">{voice?"🔊":"🔇"}</button>
+        <button type="button" className="voice" onClick={readLastReply} aria-label="Lire la dernière réponse" title="Lire la dernière réponse">🔊</button>
         {error?<small className="error">{error}</small>:<small>{footer}</small>}
       </form>
     </section>
