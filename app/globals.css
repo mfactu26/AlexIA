@@ -11,7 +11,10 @@ aside{padding:28px 20px;border-right:1px solid #202431;background:#0b0e16}
 h1{margin:0;font-size:22px}
 aside p,small{color:#8c93a5}
 .brand p{margin:4px 0 0;font-size:13px}
-nav{display:grid;gap:9px;margin-top:34px}\n.side-status{margin-top:auto;padding:14px;border:1px solid #252d3d;border-radius:16px;background:#111621;display:grid;gap:6px}\n.side-status b{font-size:13px;color:#c8bcff}.side-status span{font-size:12px;color:#8c93a5;line-height:1.5}\n.mobile-backdrop{display:none}
+nav{display:grid;gap:9px;margin-top:34px}
+.side-status{margin-top:auto;padding:14px;border:1px solid #252d3d;border-radius:16px;background:#111621;display:grid;gap:6px}
+.side-status b{font-size:13px;color:#c8bcff}.side-status span{font-size:12px;color:#8c93a5;line-height:1.5}
+.mobile-backdrop{display:none}
 button{border:0;border-radius:12px;background:#151925;color:#e9eaff;padding:12px;text-align:left}
 button:disabled{opacity:.5}
 nav button:hover,button.active{background:#242a3b}
@@ -56,7 +59,9 @@ header i{font-size:13px;color:#72e3aa;font-style:normal}
 
 @media(max-width:700px){
   main{grid-template-columns:1fr}
-  aside{display:none}
+  aside{display:flex;flex-direction:column;position:fixed;inset:0 auto 0 0;width:min(82vw,300px);height:100dvh;z-index:40;transform:translateX(-105%);transition:transform .22s ease;padding:26px 20px;box-shadow:24px 0 60px #0008}
+  aside.open{transform:translateX(0)}
+  .mobile-backdrop{display:block;position:fixed;inset:0;z-index:35;background:#0008;border:0;border-radius:0;padding:0}
   header{height:82px;padding:0 16px;border-bottom-color:#171c28}
   .mobile-menu{display:grid;place-items:center;width:42px;height:42px;border:1px solid #2a3040;border-radius:14px;background:#111621;margin-right:10px;padding:0;text-align:center}
   .header-brand{margin-right:auto}
