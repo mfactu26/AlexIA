@@ -317,7 +317,7 @@ export default function Home(){
     const attachments=[...files];
     if(!text&&!attachments.length)return;
 
-    if(text&&!attachments.length&&wantsReadAloud(text)){
+    if(text&&wantsReadAloud(text)){
       setInput("");
       readLastReply();
       return;
