@@ -1,8 +1,8 @@
 "use client";
 import {FormEvent,useEffect,useRef,useState} from "react";
 
-type Msg={id:string;role:"user"|"assistant";content:string;pending?:boolean};
-type Att={name:string;type:string;data:string};
+type Msg={id:string;role:"user"|"assistant";content:string;pending?:boolean;image?:string;downloadName?:string};
+type Att={name:string;type:string;data:string;width?:number;height?:number};
 type Loc={lat:number;lon:number;accuracy?:number};
 type SpeechRecognitionEventLike={results:{[key:number]:{[key:number]:{transcript:string}}}};
 type SendOptions={forceLocation?:boolean;forceWebSearch?:boolean};
@@ -29,6 +29,35 @@ function cleanSpeechText(t:string){
 }
 function wantsLocation(t:string){
   return /\b(météo|meteo|quel temps|temps fait|où suis|ou suis|ma position|localisation|près de moi|pres de moi|autour de moi|ici)\b/i.test(t);
+}
+function wantsImageEdit(t:string){
+  return /\b(modif|retouch|transform|change|remplace|supprim|enlève|enleve|efface|ajout|rajout|mets?|rends?|convert|recadr|rogne|tourne|rotation|redress|agrand|upscal|zoome|noir\s+et\s+blanc|sépia|sepia|couleur|luminos|contraste|nett|flou|fond|arrière[- ]plan|arriere[- ]plan|style|filtre|amélior|amelior|restaur)\w*/i.test(t);
+}
+async function imageFileToAtt(f:File):Promise<Att>{
+  const originalData=await new Promise<string>((ok,no)=>{const x=new FileReader();x.onload=()=>ok(String(x.result));x.onerror=()=>no(x.error);x.readAsDataURL(f)});
+  if(!f.type.startsWith("image/"))return {name:f.name,type:f.type||"application/octet-stream",data:originalData};
+  try{
+    const img=await new Promise<HTMLImageElement>((ok,no)=>{
+      const el=new Image(),url=URL.createObjectURL(f);
+      el.onload=()=>{URL.revokeObjectURL(url);ok(el)};
+      el.onerror=()=>{URL.revokeObjectURL(url);no(new Error("Image illisible"))};
+      el.src=url;
+    });
+    const maxEdge=2048;
+    const scale=Math.min(1,maxEdge/Math.max(img.naturalWidth,img.naturalHeight));
+    const width=Math.max(1,Math.round(img.naturalWidth*scale));
+    const height=Math.max(1,Math.round(img.naturalHeight*scale));
+    if(f.size<=3*1024*1024&&scale===1)return {name:f.name,type:f.type||"image/jpeg",data:originalData,width:img.naturalWidth,height:img.naturalHeight};
+    const canvas=document.createElement("canvas");
+    canvas.width=width;canvas.height=height;
+    const ctx=canvas.getContext("2d");
+    if(!ctx)throw new Error("Canvas indisponible");
+    ctx.drawImage(img,0,0,width,height);
+    const data=canvas.toDataURL("image/jpeg",0.88);
+    return {name:f.name.replace(/\.[^.]+$/,"")+".jpg",type:"image/jpeg",data,width,height};
+  }catch{
+    return {name:f.name,type:f.type||"image/jpeg",data:originalData};
+  }
 }
 function renderMessage(text:string){
   const lines=text.split("\n");
@@ -65,6 +94,7 @@ export default function Home(){
   const[menuOpen,setMenuOpen]=useState(false);
   const end=useRef<HTMLDivElement>(null);
   const messagesRef=useRef<Msg[]>([]);
+  const lastImageRef=useRef<Att|undefined>(undefined);
   const photoInput=useRef<HTMLInputElement>(null);
 
   function commitMessages(updater:(prev:Msg[])=>Msg[]){
@@ -105,9 +135,10 @@ export default function Home(){
     const chosen=Array.from(list).slice(0,4);
     const out:Att[]=[];
     for(const f of chosen){
-      if(f.size>8*1024*1024){setError(f.name+" dépasse 8 Mo.");continue}
-      const data=await new Promise<string>((ok,no)=>{const x=new FileReader();x.onload=()=>ok(String(x.result));x.onerror=()=>no(x.error);x.readAsDataURL(f)});
-      out.push({name:f.name,type:f.type||"application/octet-stream",data});
+      if(f.size>20*1024*1024){setError(f.name+" est trop volumineux pour être envoyé. AlexIA accepte les photos jusqu’à 20 Mo et les compresse automatiquement.");continue}
+      const att=await imageFileToAtt(f);
+      out.push(att);
+      if(att.type.startsWith("image/"))lastImageRef.current=att;
     }
     setFiles(v=>[...v,...out].slice(0,4));
   }
@@ -120,8 +151,12 @@ export default function Home(){
 
     const shown=text||(attachments.length?"Analyse "+attachments.map(f=>f.name).join(", "):"");
     const requestId=uid("req-");
-    const userMsg:Msg={id:uid("u-"),role:"user",content:shown};
-    const pendingMsg:Msg={id:requestId,role:"assistant",content:"Je réfléchis…",pending:true};
+    const attachedImage=attachments.find(a=>a.type.startsWith("image/"));
+    if(attachedImage)lastImageRef.current=attachedImage;
+    const editSource=attachedImage||lastImageRef.current;
+    const imageEdit=Boolean(text&&editSource&&wantsImageEdit(text));
+    const userMsg:Msg={id:uid("u-"),role:"user",content:shown,image:attachedImage?.data};
+    const pendingMsg:Msg={id:requestId,role:"assistant",content:imageEdit?"Je modifie la photo…":"Je réfléchis…",pending:true};
 
     const context=messagesRef.current
       .filter(m=>!m.pending)
@@ -138,6 +173,20 @@ export default function Home(){
     if(webSearchNext)setWebSearchNext(false);
 
     try{
+      if(imageEdit&&editSource){
+        const q=await fetch("/api/image-edit",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({prompt:text,image:editSource})
+        });
+        const data=await q.json();
+        if(!q.ok)throw new Error(data.error||"Modification de l’image impossible");
+        const edited:Att={name:data.filename||"alexia-modifiee.png",type:data.mime||"image/png",data:data.image,width:data.width,height:data.height};
+        lastImageRef.current=edited;
+        commitMessages(prev=>prev.map(m=>m.id===requestId?{...m,content:"Photo modifiée.",pending:false,image:data.image,downloadName:edited.name}:m));
+        return;
+      }
+
       let location:Loc|undefined;
       if(options.forceLocation||wantsLocation(text)){
         location=await getDeviceLocation();
@@ -217,6 +266,7 @@ export default function Home(){
     setPendingCount(0);
     setWebSearchNext(false);
     setMenuOpen(false);
+    lastImageRef.current=undefined;
     localStorage.removeItem("alexia-history");
     window.speechSynthesis?.cancel();
   }
@@ -267,7 +317,7 @@ export default function Home(){
       <form className="composer" onSubmit={send}>
         <input ref={photoInput} type="file" accept="image/*" style={{display:"none"}} onChange={e=>addFiles(e.target.files)}/>
         <label title="Joindre photo ou document">📎<input type="file" accept="image/*,.pdf,.txt" multiple style={{display:"none"}} onChange={e=>addFiles(e.target.files)}/></label>
-        {files.length>0&&<div className="attachments">{files.map((f,i)=><button type="button" key={i} onClick={()=>setFiles(v=>v.filter((_,j)=>j!==i))}>📎 {f.name} ×</button>)}</div>}
+        {files.length>0&&<div className="attachments">{files.map((f,i)=><button type="button" key={i} onClick={()=>setFiles(v=>v.filter((_,j)=>j!==i))}>{f.type.startsWith("image/")?"🖼️":"📎"} {f.name} ×</button>)}</div>}
         <textarea
           value={input}
           onChange={e=>setInput(e.target.value)}
