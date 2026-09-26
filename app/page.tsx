@@ -61,7 +61,7 @@ export default function Home(){
   const[voice,setVoice]=useState(true);
   const[files,setFiles]=useState<Att[]>([]);
   const[locationState,setLocationState]=useState<"idle"|"ok"|"denied">("idle");
-  const[webSearchNext,setWebSearchNext]=useState(false);
+  const[webSearchNext,setWebSearchNext]=useState(false);\n  const[menuOpen,setMenuOpen]=useState(false);
   const end=useRef<HTMLDivElement>(null);
   const messagesRef=useRef<Msg[]>([]);
   const photoInput=useRef<HTMLInputElement>(null);
@@ -238,7 +238,7 @@ export default function Home(){
     </aside>
     <section>
       <header>
-        <div className="mobile-menu">☰</div>
+        <button type="button" className="mobile-menu" aria-label="Ouvrir le menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(v=>!v)}>☰</button>
         <div className="header-brand"><div className="mini-orb">A</div><div><b>Alex<span>IA</span></b><small>{mode==="Work"?"Mission autonome":"Conversation intelligente"}</small></div></div>
         <i>{status}</i>
       </header>
