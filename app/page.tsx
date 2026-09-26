@@ -43,17 +43,17 @@ async function imageFileToAtt(f:File):Promise<Att>{
       el.onerror=()=>{URL.revokeObjectURL(url);no(new Error("Image illisible"))};
       el.src=url;
     });
-    const maxEdge=2048;
+    const maxEdge=1800;
     const scale=Math.min(1,maxEdge/Math.max(img.naturalWidth,img.naturalHeight));
     const width=Math.max(1,Math.round(img.naturalWidth*scale));
     const height=Math.max(1,Math.round(img.naturalHeight*scale));
-    if(f.size<=3*1024*1024&&scale===1)return {name:f.name,type:f.type||"image/jpeg",data:originalData,width:img.naturalWidth,height:img.naturalHeight};
+    if(f.size<=1500*1024&&scale===1)return {name:f.name,type:f.type||"image/jpeg",data:originalData,width:img.naturalWidth,height:img.naturalHeight};
     const canvas=document.createElement("canvas");
     canvas.width=width;canvas.height=height;
     const ctx=canvas.getContext("2d");
     if(!ctx)throw new Error("Canvas indisponible");
     ctx.drawImage(img,0,0,width,height);
-    const data=canvas.toDataURL("image/jpeg",0.88);
+    const data=canvas.toDataURL("image/jpeg",0.84);
     return {name:f.name.replace(/\.[^.]+$/,"")+".jpg",type:"image/jpeg",data,width,height};
   }catch{
     return {name:f.name,type:f.type||"image/jpeg",data:originalData};
