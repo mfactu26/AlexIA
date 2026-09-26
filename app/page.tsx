@@ -33,6 +33,9 @@ function wantsLocation(t:string){
 function wantsImageEdit(t:string){
   return /\b(modif|retouch|transform|change|remplace|supprim|enlève|enleve|efface|ajout|rajout|mets?|rends?|convert|recadr|rogne|tourne|rotation|redress|agrand|upscal|zoome|noir\s+et\s+blanc|sépia|sepia|couleur|luminos|contraste|nett|flou|fond|arrière[- ]plan|arriere[- ]plan|style|filtre|amélior|amelior|restaur)\w*/i.test(t);
 }
+function wantsImageAnalysis(t:string){
+  return /\b(analy|analyse|analys|décris|decris|décrit|decrit|description|que vois|qu['’]est[- ]ce que tu vois|qu['’]y a[- ]t[- ]il|identif|reconnais|reconnaître|reconnaitre|lis|lire|extrais|extraire|explique.*(?:photo|image)|regarde.*(?:photo|image))\w*/i.test(t);
+}
 async function imageFileToAtt(f:File):Promise<Att>{
   const originalData=await new Promise<string>((ok,no)=>{const x=new FileReader();x.onload=()=>ok(String(x.result));x.onerror=()=>no(x.error);x.readAsDataURL(f)});
   if(!f.type.startsWith("image/"))return {name:f.name,type:f.type||"application/octet-stream",data:originalData};
@@ -138,7 +141,6 @@ export default function Home(){
       if(f.size>20*1024*1024){setError(f.name+" est trop volumineux pour être envoyé. AlexIA accepte les photos jusqu’à 20 Mo et les compresse automatiquement.");continue}
       const att=await imageFileToAtt(f);
       out.push(att);
-      if(att.type.startsWith("image/"))lastImageRef.current=att;
     }
     setFiles(v=>[...v,...out].slice(0,4));
   }
@@ -150,22 +152,22 @@ export default function Home(){
     if(!text&&!attachments.length)return;
 
     const attachedImage=attachments.find(a=>a.type.startsWith("image/"));
-    if(attachedImage)lastImageRef.current=attachedImage;
 
-    // Une photo envoyée seule est simplement conservée. AlexIA attend la consigne
-    // au lieu de lancer automatiquement une analyse visuelle.
+    // Comme dans ChatGPT : la photo reste dans le composer tant qu'une consigne
+    // texte ou vocale n'a pas été ajoutée. Aucun envoi ni aucune analyse automatique.
     if(!text&&attachedImage){
-      const userMsg:Msg={id:uid("u-"),role:"user",content:"Photo ajoutée",image:attachedImage.data};
-      commitMessages(prev=>[...prev,userMsg]);
-      setFiles([]);
       setError("");
+      setTimeout(()=>document.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus(),0);
       return;
     }
 
+    if(attachedImage)lastImageRef.current=attachedImage;
     const shown=text||(attachments.length?"Pièce jointe ajoutée": "");
     const requestId=uid("req-");
     const editSource=attachedImage||lastImageRef.current;
     const imageEdit=Boolean(text&&editSource&&wantsImageEdit(text));
+    const imageAnalysis=Boolean(text&&editSource&&wantsImageAnalysis(text));
+    const chatAttachments=attachments.filter(a=>!a.type.startsWith("image/")||imageAnalysis);
     const userMsg:Msg={id:uid("u-"),role:"user",content:shown,image:attachedImage?.data};
     const pendingMsg:Msg={id:requestId,role:"assistant",content:imageEdit?"Je modifie la photo…":"Je réfléchis…",pending:true};
 
@@ -208,7 +210,7 @@ export default function Home(){
       const q=await fetch("/api/chat",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({messages:requestMessages,mode,attachments,location,forceWebSearch})
+        body:JSON.stringify({messages:requestMessages,mode,attachments:chatAttachments,location,forceWebSearch})
       });
 
       if(!q.ok){
@@ -251,7 +253,11 @@ export default function Home(){
   }
 
   useEffect(()=>{
-    (window as any).__alexiaVoiceResult=(t:string)=>{setListening(false);setInput(t);send(undefined,t)};
+    (window as any).__alexiaVoiceResult=(t:string)=>{
+      setListening(false);
+      setInput(cleanVoiceText(t));
+      setTimeout(()=>document.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus(),0);
+    };
     (window as any).__alexiaVoiceError=()=>{setListening(false);setError("Je n’ai pas pu entendre. Réessayez.")};
     return()=>{delete (window as any).__alexiaVoiceResult;delete (window as any).__alexiaVoiceError}
   },[mode,files,voice,webSearchNext]);
@@ -266,7 +272,10 @@ export default function Home(){
     x.onstart=()=>setListening(true);
     x.onend=()=>setListening(false);
     x.onerror=()=>setError("Je n’ai pas pu entendre.");
-    x.onresult=(e:SpeechRecognitionEventLike)=>send(undefined,e.results[0][0].transcript);
+    x.onresult=(e:SpeechRecognitionEventLike)=>{
+      setInput(cleanVoiceText(e.results[0][0].transcript));
+      setTimeout(()=>document.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus(),0);
+    };
     x.start();
   }
 
@@ -328,15 +337,17 @@ export default function Home(){
       <form className="composer" onSubmit={send}>
         <input ref={photoInput} type="file" accept="image/*" style={{display:"none"}} onChange={e=>addFiles(e.target.files)}/>
         <label title="Joindre photo ou document">📎<input type="file" accept="image/*,.pdf,.txt" multiple style={{display:"none"}} onChange={e=>addFiles(e.target.files)}/></label>
-        {files.length>0&&<div className="attachments">{files.map((f,i)=><button type="button" key={i} onClick={()=>setFiles(v=>v.filter((_,j)=>j!==i))}>{f.type.startsWith("image/")?"🖼️":"📎"} {f.name} ×</button>)}</div>}
+        {files.length>0&&<div className="attachments">{files.map((f,i)=>f.type.startsWith("image/")?
+          <div className="attachment-preview" key={i}><img src={f.data} alt="Photo jointe"/><button type="button" aria-label="Retirer la photo" onClick={()=>setFiles(v=>v.filter((_,j)=>j!==i))}>×</button></div>
+          :<button type="button" key={i} onClick={()=>setFiles(v=>v.filter((_,j)=>j!==i))}>📎 {f.name} ×</button>)}</div>}
         <textarea
           value={input}
           onChange={e=>setInput(e.target.value)}
           onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();send()}}}
-          placeholder={listening?"Je vous écoute…":pendingCount>0?"Posez une autre question…":webSearchNext?"Rechercher sur le Web…":"Écrivez ou parlez à AlexIA…"}
+          placeholder={listening?"Je vous écoute…":files.some(f=>f.type.startsWith("image/"))?"Que veux-tu faire avec cette photo ?":pendingCount>0?"Posez une autre question…":webSearchNext?"Rechercher sur le Web…":"Écrivez ou parlez à AlexIA…"}
         />
         <button type="button" className={"send mic"+(listening?" listening":"")} onClick={listen} aria-label="Parler">{listening?"◉":"🎤"}</button>
-        <button className="send" aria-label="Envoyer">➜</button>
+        <button className="send" aria-label="Envoyer" disabled={files.some(f=>f.type.startsWith("image/"))&&!input.trim()}>➜</button>
         <button type="button" className="voice" onClick={()=>setVoice(v=>!v)} aria-label="Activer ou couper la voix">{voice?"🔊":"🔇"}</button>
         {error?<small className="error">{error}</small>:<small>{footer}</small>}
       </form>
