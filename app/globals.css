@@ -56,8 +56,11 @@ header i{font-size:13px;color:#72e3aa;font-style:normal}
 .composer>.mic{background:#765cff}
 .composer>.mic.listening{box-shadow:0 0 0 4px #765cff30,0 0 28px #765cff66}
 .composer>.voice{grid-column:5;grid-row:1;background:#151b28;font-size:20px}
-.composer>.attachments{grid-column:1/-1;grid-row:2;display:flex;gap:6px;flex-wrap:wrap}
-.composer>.attachments button{padding:7px 9px;font-size:12px}
+.composer>.attachments{grid-column:1/-1;grid-row:2;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.composer>.attachments>button{padding:7px 9px;font-size:12px}
+.attachment-preview{position:relative;width:72px;height:72px;border-radius:14px;overflow:hidden;border:1px solid #343c52;background:#090c13;box-shadow:0 8px 20px #0004}
+.attachment-preview img{width:100%;height:100%;object-fit:cover;display:block}
+.attachment-preview button{position:absolute;top:4px;right:4px;width:24px;height:24px;padding:0;border-radius:50%;display:grid;place-items:center;text-align:center;background:#080b12dd;color:#fff;border:1px solid #495067;font-size:18px;line-height:1}
 .composer>small{grid-column:1/-1;grid-row:3;display:block;text-align:center;margin-top:2px}
 .error{color:#ff8585}
 
@@ -87,7 +90,7 @@ header i{font-size:13px;color:#72e3aa;font-style:normal}
   .composer>.mic{grid-column:3;grid-row:1}
   .composer>.send:not(.mic){grid-column:4;grid-row:1}
   .composer>.voice{grid-column:1;grid-row:2;width:44px;height:40px}
-  .composer>.attachments{grid-column:2/-1;grid-row:2}
+  .composer>.attachments{grid-column:1/-1;grid-row:2;padding-left:4px}
   .composer>small{grid-column:1/-1;grid-row:3;font-size:11px}
   .composer>.send{width:48px;height:48px;font-size:21px}
 }
