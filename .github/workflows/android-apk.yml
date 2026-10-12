@@ -16,7 +16,7 @@ jobs:
         with:
           gradle-version: '8.9'
       - run: gradle -p android assembleDebug
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: AlexIA-Android
           path: android/app/build/outputs/apk/debug/app-debug.apk
