@@ -14,7 +14,6 @@ permissions:
 
 jobs:
   npm-audit:
-    if: ${{ hashFiles('package.json') != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -25,6 +24,7 @@ jobs:
         with:
           node-version: 24
       - name: Audit dependencies without running package install scripts
+        if: ${{ hashFiles('package.json') != '' }}
         run: |
           if [ -f package-lock.json ]; then
             npm audit --audit-level=high
